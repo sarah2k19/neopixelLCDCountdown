@@ -169,19 +169,19 @@ void loop(){
        }    
        case btnUP:{
              lcd.setCursor(0,0);
-             lcd.print("Setting time");  //  push button "UP" and show the value of StartTime on the screen
+             lcd.print("Tijd instellen");  //  push button "UP" and show the value of StartTime on the screen
              lcd.print("                ");
              minutes++;
-             counterDown();
+             showTime();
              delay(500);
              break;
        }
        case btnDOWN:{
              lcd.setCursor(0,0);
-             lcd.print("Setting time");  //  push button "DOWN" and show the word on the screen
+             lcd.print("Tijd instellen");  //  push button "DOWN" and show the word on the screen
              lcd.print("                ");
              minutes--;
-             counterDown();
+             showTime();
              delay(500);
              break;
        }
@@ -197,7 +197,7 @@ void loop(){
 }
 
 void dateprint() {
-//Create current time label and print it to the SD card and LCD
+//Create current time label and print it to the SD card
     DateTime now = rtc.now();
     myFile.print(now.year(), DEC);
     myFile.print('/');
@@ -214,110 +214,134 @@ void dateprint() {
 }
 
 void stopTimer(){
-             lcd.print("STOP             "); //  push button "LEFT" and show the word on the screen
-             seconds = 0;
- 
-             myFile.close(); // in case of interuption START... data is saved
-             myFile = SD.open("datalog.txt", FILE_WRITE);
-           
-           // logging the ellapsed time after Start was initiated by the user, to the SD file
-           if (myFile) {
-              Serial.print("Writing Stop to InteractorLog...");
-
-              myFile.print("Time stop: ");
-              dateprint();
-              myFile.println("  ");
-              
-            // close the file:
-              myFile.close();
-               delay(2000);
-               lcd.setCursor(0,0);              
-               lcd.print("Set time          "); 
-               lcd.setCursor(0,1);              
-               lcd.print("                  "); 
-              Serial.println("done.");
-              } else {
-              // if the file didn't open, print an error:
-              Serial.println("error STOP opening datalog.txt");
-              }
-             delay(500);
+  if (stopState == 1 && startState == 0) {
+    lcd.print("GESTOPT             ");
+//    myFile.close(); // in case of interuption START... data is saved
+    myFile = SD.open("datalog.txt", FILE_WRITE);
+    if (myFile) {     // logging the ellapsed time after Start was initiated by the user, to the SD file
+      myFile.print("Extra caretime after countdown: ");
+      logCounter();
+      myFile.print("Time stop: ");
+      dateprint();
+      myFile.close();
+    } else {
+      // if the file didn't open, print an error:
+      Serial.println("error STOP opening datalog.txt");
+    }
+    // Print to lcd to reset the Interactor
+     lcd.setCursor(0,1);              
+     lcd.print("Klik op reset"); 
   }
-
-void checklog (){
-     // re-open the file for reading and check during programming:
-        myFile = SD.open("datalog.txt");
-        if (myFile) {
-          Serial.println("datalog.txt:");
-          // read from the file until there's nothing else in it:
-          while (myFile.available()) {
-            Serial.write(myFile.read());
-          }
-          // close the file:
-          myFile.close();
-        }
+  stopState = 0;
 }
 
-void counterUp (){ 
-      // create variable CareTime to store elapsed time after START is pressed.
-      if (StartTime > 0) {CareTime = (millis() - StartTime);}       
-      
-      if (CareTime > 1000) {
-        PrintTimer = CareTime/1000;
-        lcd.setCursor(0,9);
-        lcd.print(PrintTimer);  //visualize Caretime in seconds on LCD
-        lcd.print("     ");  // clearing previous parts of LCD
-      } 
+void checklog(){ // re-open the file for reading and check during programming:
+  myFile = SD.open("datalog.txt");
+  if (myFile) {
+    Serial.println("datalog.txt:"); 
+    while (myFile.available()) { // read from the file until there's nothing else in it:
+      Serial.write(myFile.read());
+    }
+    myFile.close();
+  }
 }
 
-void logCounterDown() {
- (minutes < 10) ? myFile.print("0") : NULL;
- myFile.print(minutes);
- myFile.print(":");
- (seconds < 10) ? myFile.print("0") : NULL;
- myFile.print(seconds);
- myFile.println();
+void logCounter() {
+  (minutes < 10) ? myFile.print("0") : DEC;
+  myFile.print(minutes);
+  myFile.print(":");
+  (seconds < 10) ? myFile.print("0") : DEC;
+  myFile.print(seconds);
+  myFile.println();
 }
  
 void stepDown() {
-  while (hours > 0 || minutes > 0 || seconds >= 0) {
-    counterDown();
-    delay(1000); 
- if (seconds >= 0) {
- seconds -= 1;
- } else {
- if (minutes > 0) {
- seconds = 59;
- minutes -= 1;
- } 
- }
- }
+  unsigned long currentMillis = millis();
+  if (currentMillis - previousMillis >= 1000){
+    previousMillis = currentMillis; 
+    
+    if (stopState == 0 && startState == 1 && startLog == 1) {
+      myFile = SD.open("datalog.txt", FILE_WRITE);
+      if (myFile) {
+        myFile.print("Counter time set: ");
+        logCounter();
+        myFile.print("Time start: ");
+        dateprint();
+        myFile.close();
+      } 
+      startLog = 0;
+    }
+   
+    if (stopState == 0 && startState == 1) {
+        showTime();
+//        if (minutes % 12 == 0 ) {
+//          pixelCount -= 1;
+//        }
+        if (seconds > 0) {
+          seconds -= 1;
+        } else{
+        if (minutes > 0) {
+          seconds = 59;
+          minutes -= 1;
+        }}
+      }
+   
+    if (stopState == 0 && startState == 1 && minutes == 0 && seconds == 0) {
+        myFile = SD.open("datalog.txt", FILE_WRITE);
+        if (myFile) {myFile.print("Counter time ended: ");
+        dateprint();
+        myFile.close();
+//        lcd.setCursor(0,1);
+//        lcd.print("-");
+        }
+        startLog = 2;
+      }
+    
+    
+    
+    
+    
+    }
+
+
+    
+//   }
+//  }
+//  void stepUp() {
+//  unsigned long currentMillis = millis();
+//  if (currentMillis - previousMillis >= 1000){
+//    previousMillis = currentMillis; 
+//    
+    
+    if (stopState == 0 && startState == 1 && startLog == 2 && minutes >= 0 && seconds >= 0) {
+        lcd.setCursor(0,1);
+        lcd.print("-");
+        showTime();
+//        if (seconds % 6 == 0 ) {
+//          pixelCount += 1;
+//        }
+        if (seconds < 59) {
+          seconds += 1;
+        } else {
+        if (seconds = 59) {
+          seconds = 00;
+          minutes += 1;
+        }
+      }
+    }
 }
 
-void counterDown() {
-  lcd.setCursor(0,2);
-  // (hours < 10) ? lcd.print("0") : NULL;
-  // lcd.print(hours);
-  // lcd.print(":");
-  (minutes < 10) ? lcd.print("0") : NULL;
+void showTime() {
+  lcd.setCursor(1,1);
+  (hours < 10 && hours > 0) ? lcd.print("0") : DEC;
+  (hours > 0) ? lcd.print(hours) : DEC;
+  (hours > 0) ? lcd.print(":") : DEC;
+  (minutes < 10) ? lcd.print("0") : DEC;
   lcd.print(minutes);
   lcd.print(":");
-  (seconds < 10) ? lcd.print("0") : NULL;
-  lcd.print(seconds);
+  (seconds < 10) ? lcd.print("0") : DEC;
+  lcd.print(seconds); 
   lcd.print("                 ");
-  }
- 
-void trigger() {
- //lcd.clear(); // clears the screen and buffer
-
-//  myFile = SD.open("datalog.txt", FILE_WRITE);
-//// logging the time CountDown ended to the SD file
-//   if (myFile) { 
-      myFile.print("Time countdown ended: ");
-      dateprint() ;
-//      myFile.close();
-//   }
- seconds = 0;
- lcd.setCursor(0,0); // set timer position on lcd for end.
- lcd.print("TIMER END           ");
- loop();
+  
+  LED();
 }
