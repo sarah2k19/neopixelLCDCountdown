@@ -28,22 +28,26 @@ The led lights use pin: 13
 #include "RTClib.h"
 #include <SPI.h>
 #include <SD.h>
-#include <LiquidCrystal.h> //for LCD
+//#include <LiquidCrystal.h> //for LCD on Arduino with shields
+#include "Adafruit_LiquidCrystal.h" //for LCD on Adalogger
 #include <Adafruit_NeoPixel.h> //for LED
 
 // DEFINITIONS:
 //*****************
+//LiquidCrystal lcd(8, 9, 4, 5, 6, 7);      // for UNO whith LCD shield
+Adafruit_LiquidCrystal lcd(6, 5, 9, 10, 11, 12);     // for adalogger 
+
 File myFile;
 RTC_DS1307 rtc;
   
 // Setup variable for SD adalogger
 #define cardSelect 4 //for Adalogger
 //#define cardSelect 10 //for UNO with shields
-int logFile = "datalog3.txt";
+int logFile = "datalogc.txt";
 
 // Setup variable for timer
 int hours = 0; // start hours
-int minutes = 1; //start min
+int minutes = 15; //start min
 int seconds = 0; //start seconds
 boolean stopState = 0;
 boolean startState = 0;
@@ -54,9 +58,6 @@ int buttonDelay = 500;
 unsigned long previousMillis = 0;
 int setMinutes; // variable to store the minutes set by the user for countdown
 int secondsCont = 0;
-
-//LiquidCrystal lcd(8, 9, 4, 5, 6, 7);      // for UNO whith LCD shield
-LiquidCrystal lcd(6, 5, 9, 10, 11, 12);     // for adalogger 
 
 // define some values used by the panel and buttons
 int lcd_key     = 0;
@@ -75,9 +76,8 @@ int read_LCD_buttons(){               // read the buttons
      if (adc_key_in > 1000) return btnNONE;    
      if (adc_key_in > 915)  return btnLEFT;     // stop blue-wire
      if (adc_key_in > 840)  return btnUP;       // up-reset yellow-wire
-     if (adc_key_in > 770)  return btnDOWN;     // down-reset green-wire
+     if (adc_key_in > 760)  return btnDOWN;     // down-reset green-wire
      if (adc_key_in > 720)  return btnRIGHT;    // start black-wire
-     if (adc_key_in < 500)  return btnNONE;   
 
      // values from hardware Arduino LCD keypad shield
 //     if (adc_key_in > 1000) return btnNONE;    
@@ -99,12 +99,11 @@ uint32_t pixelColor;
 
 void setup(){
 // Setup Serial communication  
-  while (!Serial); // for Leonardo/Micro/Zero
   Serial.begin(57600);
-
+// Setup LCD    
+  lcd.begin(16, 2);
 // Setup RTC
   //Serial.print("Initializing RTC...");
-  Serial.begin(57600);
   if (! rtc.begin()) {
   Serial.println("Couldn't find RTC");
   }  
@@ -119,18 +118,30 @@ void setup(){
   myFile = SD.open(logFile, FILE_WRITE);
   Serial.println("Writing to Interactor Logfile...");
   if (myFile) {
-    myFile.println("Start Logging sequence: ");
+    myFile.println();
+    myFile.print("Start Logging sequence: ");
     dateprint();
     myFile.close();
   } else {
-    Serial.println("error opening datalog3.txt");
+    Serial.println("error opening datalog.txt");
   }
   showStart();
+//  checklog();
 }
 
 void loop(){
    lcd.setCursor(0,0);             // move to the begining of the first line
    lcd_key = read_LCD_buttons();   // read the buttons
+    
+    if (analogRead(1) > 990 && startState == 0){
+       lcd.setCursor(0,0);
+       lcd.print("Tijd instellen");  
+       lcd.print("                ");
+       minutes--;
+       showTime();
+       delay(buttonDelay);
+    }
+   
    switch (lcd_key){               // depending on which button was pushed, we perform an action
 // the methodes in btnNONE will be valid continuously and be activated by using the buttons which changes the states of some variables  
        case btnNONE:{
@@ -139,7 +150,7 @@ void loop(){
        }
        case btnRIGHT:{  
        // btnRIGHT changes values of some varibles (states) so it will initiate parts of the methodes in btnNONE to start the timer           
-            lcd.print("START          ");
+            lcd.print("GEACTIVEERD          ");
             startState = 1;
             stopState = 0;
             startLog = 1;
@@ -155,6 +166,7 @@ void loop(){
             break;
        }    
        case btnUP:{
+           if (startState == 0){
            lcd.setCursor(0,0);
            lcd.print("Tijd instellen");  
            lcd.print("                ");
@@ -162,21 +174,28 @@ void loop(){
            showTime();
            delay(buttonDelay);  
            break;
+           }
        }
-       case btnDOWN:{
-           lcd.setCursor(0,0);
-           lcd.print("Tijd instellen");  
-           lcd.print("                ");
-           minutes--;
-           showTime();
-           delay(buttonDelay);
-           break;
-       }
-       case btnSELECT:{
-             lcd.print("CHECKLOG        ");  //  push button "SELECT" and show the word on the screen
-             checklog();
-             break;
-       }
+//       case btnDOWN:{
+//          if (startState == 0){
+//           lcd.setCursor(0,0);
+//           lcd.print("Tijd instellen");  
+//           lcd.print("                ");
+//            unsigned long currentMillis = millis();
+//            if (currentMillis - previousMillis >= 600){
+//            previousMillis = currentMillis; 
+//            minutes--;
+//            }
+//           showTime();
+//           delay(buttonDelay);
+//           break;
+//          }
+//       }
+//       case btnSELECT:{
+//             lcd.print("CHECKLOG        ");  //  push button "SELECT" and show the word on the screen
+//             checklog();
+//             break;
+//       }
    }
 }
 
@@ -199,6 +218,7 @@ void dateprint() {
 
 void timer() { 
     if (stopState == 0 && startState == 1 && startLog == 1) {
+      if (secondsCont == 0){
       setMinutes = minutes;
       Serial.print("Minutes set on: ");
       Serial.println(setMinutes);
@@ -208,6 +228,7 @@ void timer() {
       pixelDivided = secondsCont / 12;
       Serial.print("pixelDivided: ");
       Serial.println(pixelDivided);
+      }
       myFile = SD.open(logFile, FILE_WRITE);
         if (myFile) {
           myFile.print("Counter time set: ");
@@ -286,9 +307,9 @@ void stopTimer(){
 // and will log the real time of the moment the stop button is activated
     lcd.print("GESTOPT             ");
 //    myFile.close(); // in case of interuption START... data is saved
-    myFile = SD.open("datalog.txt", FILE_WRITE);
+    myFile = SD.open(logFile, FILE_WRITE);
     if (myFile) {     // logging the ellapsed time after Start was initiated by the user, to the SD file
-      myFile.print("Extra caretime after countdown: ");
+      myFile.print("Delta or extra caretime after countdown: ");
       logCounter();
       myFile.print("Time stop: ");
       dateprint();
@@ -301,14 +322,14 @@ void stopTimer(){
       Serial.println("error STOP opening datalog.txt");
     }
     // Print to lcd to reset the Interactor
-     lcd.setCursor(0,1);              
+     lcd.setCursor(1,1);              
      lcd.print("Klik op reset"); 
   stopState = 0;
   resetState = 1;
 }
 
 void checklog(){ // re-open the file for reading and check during programming:
-  myFile = SD.open("datalog.txt");
+  myFile = SD.open(logFile);
   if (myFile) {
     Serial.println("datalog.txt:"); 
     while (myFile.available()) { // read from the file until there's nothing else in it:
@@ -328,7 +349,7 @@ void reset(){
             myFile.close();
           } 
           hours = 0;
-          minutes = 1;
+          minutes = 15;
           seconds = 0;
           stopState = 0;
           secondsCont = 0;
